@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 // ─── localStorage Storage ───
 const STORAGE_KEY = "roster-hub-data";
+const SESSION_KEY = "roster-hub-session";
 const Storage = {
   get() {
     try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null; } catch { return null; }
@@ -9,6 +10,15 @@ const Storage = {
   set(value) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (e) { console.error(e); }
   },
+};
+const Session = {
+  get() {
+    try { const d = sessionStorage.getItem(SESSION_KEY); return d ? JSON.parse(d) : null; } catch { return null; }
+  },
+  set(value) {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch (e) { console.error(e); }
+  },
+  clear() { try { sessionStorage.removeItem(SESSION_KEY); } catch {} },
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -22,10 +32,18 @@ const ARTISTS = [
   { id: "sarah", name: "Sarah Grace Buckley", color: "#E0A830", initials: "SG" },
 ];
 
+const DEFAULT_PASSWORDS = {
+  manager: "matt2026",
+  emma: "emma2026",
+  dustin: "dustin2026",
+  stamps: "stamps2026",
+  sarah: "sarah2026",
+};
+
 const COLUMNS = [
-  { id: "todo", label: "To Do", color: "#8892A0", emoji: "📋" },
-  { id: "active", label: "In Progress", color: "#E0A830", emoji: "⚡" },
-  { id: "done", label: "Done", color: "#5DAE4B", emoji: "✓" },
+  { id: "todo", label: "To Do", color: "#8892A0", emoji: "\u{1F4CB}" },
+  { id: "active", label: "In Progress", color: "#E0A830", emoji: "\u26A1" },
+  { id: "done", label: "Done", color: "#5DAE4B", emoji: "\u2713" },
 ];
 
 const PRIORITY = { high: "#E8634B", medium: "#E0A830", low: "#5DAE4B" };
@@ -70,15 +88,68 @@ const INITIAL_CONTACTS = [
   { id: uid(), artistId: "", name: "Creative Australia", role: "Funding Body", company: "Creative Australia", email: "", phone: "", notes: "Multiple grant applications across roster" },
 ];
 
-// ─── Components ───
+// ─── Login Screen ───
+function LoginScreen({ onLogin, artists, passwords }) {
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+
+  const allUsers = [
+    { id: "manager", name: "Matt (Manager)", role: "manager", color: "#4A90D9" },
+    ...artists.map(a => ({ id: a.id, name: a.name, role: "artist", color: a.color })),
+  ];
+
+  const handleLogin = () => {
+    const match = allUsers.find(u => passwords[u.id] === pw);
+    if (match) {
+      onLogin(match);
+      setError("");
+    } else {
+      setError("Incorrect password");
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    }
+  };
+
+  return (
+    <div style={{ fontFamily: "'DM Sans', -apple-system, sans-serif", background: "#F6F7F9", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <style>{`
+        @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+        .shake { animation: shake 0.4s ease; }
+        input:focus { border-color: #4A90D9 !important; box-shadow: 0 0 0 3px rgba(74,144,217,0.12) !important; }
+      `}</style>
+      <div className={shake ? "shake" : ""} style={{ background: "#fff", borderRadius: 16, padding: "40px 36px", width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.08)", textAlign: "center" }}>
+        <div style={{ fontSize: 36, marginBottom: 8 }}>{"\u{1F3B5}"}</div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: "0 0 6px" }}>Roster</h1>
+        <p style={{ fontSize: 13, color: "#999", margin: "0 0 28px" }}>Sign in to your board</p>
+        <input
+          type="password"
+          value={pw}
+          onChange={e => { setPw(e.target.value); setError(""); }}
+          onKeyDown={e => e.key === "Enter" && handleLogin()}
+          placeholder="Password"
+          autoFocus
+          style={{ width: "100%", padding: "12px 14px", background: "#FAFAFA", border: `1.5px solid ${error ? "#E8634B" : "#E0E0E0"}`, borderRadius: 10, color: "#1a1a1a", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", transition: "all 0.15s" }}
+        />
+        {error && <div style={{ color: "#E8634B", fontSize: 12, marginTop: 8, fontWeight: 500 }}>{error}</div>}
+        <button onClick={handleLogin} style={{ width: "100%", marginTop: 16, padding: "12px", background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>
+          Sign In
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared Components ───
 function Modal({ open, onClose, title, children }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 480, maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #E8E8E8" }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "#1a1a1a" }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#999", fontSize: 18, cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#999", fontSize: 18, cursor: "pointer" }}>{"\u2715"}</button>
         </div>
         <div style={{ padding: "16px 20px" }}>{children}</div>
       </div>
@@ -100,9 +171,9 @@ const iconBtn = { background: "none", border: "none", color: "#bbb", cursor: "po
 const pill = { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 20, cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "'DM Sans', -apple-system, sans-serif", border: "1.5px solid #E0E0E0", background: "#fff", color: "#777", whiteSpace: "nowrap", transition: "all 0.15s" };
 const pillActive = { background: "#E8ECF1", color: "#333", borderColor: "#C8CCD3" };
 
-function CardForm({ initial, onSave, artists, defaultStatus }) {
+function CardForm({ initial, onSave, artists, defaultStatus, lockedArtistId }) {
   const [form, setForm] = useState({
-    artistId: initial?.artistId || "", title: initial?.title || "",
+    artistId: initial?.artistId || lockedArtistId || "", title: initial?.title || "",
     category: initial?.category || "tasks", priority: initial?.priority || "medium",
     status: initial?.status || defaultStatus || "todo", dueDate: initial?.dueDate || "",
     description: initial?.description || "",
@@ -110,12 +181,18 @@ function CardForm({ initial, onSave, artists, defaultStatus }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <div>
-      <Field label="Artist">
-        <select value={form.artistId} onChange={e => set("artistId", e.target.value)} style={inp}>
-          <option value="">Select artist...</option>
-          {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-      </Field>
+      {lockedArtistId ? (
+        <div style={{ marginBottom: 14, padding: "8px 12px", background: "#f8f8f8", borderRadius: 8, fontSize: 13, color: "#666" }}>
+          {artists.find(a => a.id === lockedArtistId)?.name}
+        </div>
+      ) : (
+        <Field label="Artist">
+          <select value={form.artistId} onChange={e => set("artistId", e.target.value)} style={inp}>
+            <option value="">Select artist...</option>
+            {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label="Title"><input value={form.title} onChange={e => set("title", e.target.value)} style={inp} placeholder="What needs to be done?" /></Field>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label="Category">
@@ -139,7 +216,7 @@ function CardForm({ initial, onSave, artists, defaultStatus }) {
         <Field label="Due Date"><input type="date" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} style={inp} /></Field>
       </div>
       <Field label="Notes"><textarea value={form.description} onChange={e => set("description", e.target.value)} style={{ ...inp, height: 70, resize: "vertical" }} placeholder="Any details..." /></Field>
-      <button onClick={() => { if (form.title) onSave(form); }} style={saveBtn}>Save</button>
+      <button onClick={() => { if (form.title) onSave({ ...form, artistId: lockedArtistId || form.artistId }); }} style={saveBtn}>Save</button>
     </div>
   );
 }
@@ -164,6 +241,86 @@ function ContactForm({ initial, onSave, artists }) {
       </div>
       <Field label="Notes"><textarea value={form.notes} onChange={e => set("notes", e.target.value)} style={{ ...inp, height: 60, resize: "vertical" }} /></Field>
       <button onClick={() => { if (form.name) onSave(form); }} style={saveBtn}>Save</button>
+    </div>
+  );
+}
+
+// ─── Password Manager ───
+function PasswordManager({ passwords, artists, onUpdatePasswords }) {
+  const [edits, setEdits] = useState({});
+  const [showPw, setShowPw] = useState({});
+  const [saved, setSaved] = useState(null);
+
+  const allUsers = [
+    { id: "manager", name: "Matt (Manager)", color: "#4A90D9", initials: "MW" },
+    ...artists,
+  ];
+
+  const handleSave = (userId) => {
+    const newPw = edits[userId];
+    if (newPw && newPw.length >= 4) {
+      onUpdatePasswords({ ...passwords, [userId]: newPw });
+      setEdits(e => { const n = { ...e }; delete n[userId]; return n; });
+      setSaved(userId);
+      setTimeout(() => setSaved(null), 2000);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "#999", marginBottom: 16, lineHeight: 1.5 }}>
+        Each person has their own password. They enter it on the login screen and go straight to their view.
+      </div>
+      {allUsers.map(u => {
+        const isEditing = edits[u.id] !== undefined;
+        const currentPw = passwords[u.id] || "";
+        return (
+          <div key={u.id} style={{ padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isEditing ? 10 : 0 }}>
+              <span style={{ width: 28, height: 28, borderRadius: "50%", background: u.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{u.initials || u.name.split(" ").map(w => w[0]).join("").slice(0, 2)}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>{u.name}</div>
+                <div style={{ fontSize: 11, color: "#aaa", marginTop: 1 }}>
+                  {showPw[u.id] ? currentPw : "\u2022".repeat(currentPw.length)}
+                  <button onClick={() => setShowPw(s => ({ ...s, [u.id]: !s[u.id] }))}
+                    style={{ background: "none", border: "none", color: "#4A90D9", fontSize: 10, cursor: "pointer", marginLeft: 6, fontFamily: "inherit" }}>
+                    {showPw[u.id] ? "hide" : "show"}
+                  </button>
+                </div>
+              </div>
+              {saved === u.id ? (
+                <span style={{ fontSize: 11, color: "#5DAE4B", fontWeight: 600 }}>{"\u2713"} Saved</span>
+              ) : (
+                <button onClick={() => setEdits(e => ({ ...e, [u.id]: currentPw }))}
+                  style={{ background: "#F0F1F3", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, color: "#666", fontFamily: "inherit" }}>
+                  Change
+                </button>
+              )}
+            </div>
+            {isEditing && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", paddingLeft: 38 }}>
+                <input
+                  type="text"
+                  value={edits[u.id]}
+                  onChange={e => setEdits(ed => ({ ...ed, [u.id]: e.target.value }))}
+                  onKeyDown={e => e.key === "Enter" && handleSave(u.id)}
+                  placeholder="New password (min 4 chars)"
+                  autoFocus
+                  style={{ ...inp, flex: 1, fontSize: 12 }}
+                />
+                <button onClick={() => handleSave(u.id)}
+                  style={{ background: "#4A90D9", color: "#fff", border: "none", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                  Save
+                </button>
+                <button onClick={() => setEdits(e => { const n = { ...e }; delete n[u.id]; return n; })}
+                  style={{ background: "#f0f0f0", color: "#666", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -204,14 +361,14 @@ function KanbanCol({ col, cards, artists, onEdit, onDelete, onDrop, onAdd }) {
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", lineHeight: 1.35, marginBottom: 6 }}>{card.title}</div>
                 </div>
                 <div className="card-actions" style={{ display: "flex", gap: 2, flexShrink: 0, opacity: 0, transition: "opacity 0.15s" }}>
-                  <button onClick={e => { e.stopPropagation(); onEdit(card); }} style={iconBtn}>✎</button>
-                  <button onClick={e => { e.stopPropagation(); onDelete(card.id); }} style={{ ...iconBtn, color: "#E8634B" }}>✕</button>
+                  <button onClick={e => { e.stopPropagation(); onEdit(card); }} style={iconBtn}>{"\u270E"}</button>
+                  <button onClick={e => { e.stopPropagation(); onDelete(card.id); }} style={{ ...iconBtn, color: "#E8634B" }}>{"\u2715"}</button>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                 <Badge text={card.category} color="#8892A0" />
                 <Badge text={card.priority} color={PRIORITY[card.priority]} />
-                {card.dueDate && <span style={{ fontSize: 11, fontWeight: 500, color: overdue ? "#E8634B" : "#aaa" }}>{overdue ? "⚠ " : "📅 "}{fmtDate(card.dueDate)}</span>}
+                {card.dueDate && <span style={{ fontSize: 11, fontWeight: 500, color: overdue ? "#E8634B" : "#aaa" }}>{overdue ? "\u26A0 " : "\u{1F4C5} "}{fmtDate(card.dueDate)}</span>}
               </div>
               {card.description && <div style={{ fontSize: 12, color: "#999", marginTop: 5, lineHeight: 1.4 }}>{card.description.length > 90 ? card.description.slice(0, 90) + "..." : card.description}</div>}
             </div>
@@ -224,6 +381,7 @@ function KanbanCol({ col, cards, artists, onEdit, onDelete, onDrop, onAdd }) {
 
 // ─── Main App ───
 export default function RosterHub() {
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("board");
   const [artistFilter, setArtistFilter] = useState("all");
@@ -231,13 +389,18 @@ export default function RosterHub() {
   const [artists, setArtists] = useState(ARTISTS);
   const [cards, setCards] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [passwords, setPasswords] = useState(DEFAULT_PASSWORDS);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState("card");
   const [editItem, setEditItem] = useState(null);
   const [defaultStatus, setDefaultStatus] = useState("todo");
-  const [showArtistMgr, setShowArtistMgr] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("roster");
   const [editArtist, setEditArtist] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  const isManager = currentUser?.role === "manager";
+  const artistId = !isManager ? currentUser?.id : null;
 
   useEffect(() => {
     setIsMobile(window.innerWidth <= 768);
@@ -247,32 +410,52 @@ export default function RosterHub() {
   }, []);
 
   useEffect(() => {
+    const session = Session.get();
+    if (session) setCurrentUser(session);
     const data = Storage.get();
     if (data) {
       setArtists(data.artists || ARTISTS);
       setCards(data.cards || []);
       setContacts(data.contacts || []);
+      setPasswords(data.passwords || DEFAULT_PASSWORDS);
     } else {
       setCards(INITIAL_CARDS);
       setContacts(INITIAL_CONTACTS);
-      Storage.set({ artists: ARTISTS, cards: INITIAL_CARDS, contacts: INITIAL_CONTACTS });
+      setPasswords(DEFAULT_PASSWORDS);
+      Storage.set({ artists: ARTISTS, cards: INITIAL_CARDS, contacts: INITIAL_CONTACTS, passwords: DEFAULT_PASSWORDS });
     }
     setLoading(false);
   }, []);
 
   const save = useCallback((updates) => {
-    const state = { artists, cards, contacts, ...updates };
+    const state = { artists, cards, contacts, passwords, ...updates };
     Storage.set(state);
-  }, [artists, cards, contacts]);
+  }, [artists, cards, contacts, passwords]);
 
   const updateCards = (v) => { setCards(v); save({ cards: v }); };
   const updateContacts = (v) => { setContacts(v); save({ contacts: v }); };
   const updateArtists = (v) => { setArtists(v); save({ artists: v }); };
+  const updatePasswords = (v) => { setPasswords(v); save({ passwords: v }); };
 
   const openAddCard = (status = "todo") => { setEditItem(null); setDefaultStatus(status); setModalType("card"); setModalOpen(true); };
   const openEditCard = (card) => { setEditItem(card); setModalType("card"); setModalOpen(true); };
   const openAddContact = () => { setEditItem(null); setModalType("contact"); setModalOpen(true); };
   const openEditContact = (c) => { setEditItem(c); setModalType("contact"); setModalOpen(true); };
+
+  const handleLogin = (user) => {
+    setCurrentUser(user);
+    Session.set(user);
+    if (user.role === "artist") {
+      setArtistFilter(user.id);
+      setActiveTab("board");
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    Session.clear();
+    setArtistFilter("all");
+  };
 
   const handleSave = (formData) => {
     if (modalType === "card") {
@@ -287,7 +470,8 @@ export default function RosterHub() {
   };
 
   const filteredCards = cards.filter(c => {
-    if (artistFilter !== "all" && c.artistId !== artistFilter) return false;
+    if (artistId && c.artistId !== artistId) return false;
+    if (isManager && artistFilter !== "all" && c.artistId !== artistFilter) return false;
     if (catFilter !== "all" && c.category !== catFilter) return false;
     return true;
   });
@@ -296,18 +480,26 @@ export default function RosterHub() {
     updateCards(cards.map(c => c.id === cardId ? { ...c, status: newStatus } : c));
   };
 
+  if (!currentUser && !loading) {
+    return <LoginScreen onLogin={handleLogin} artists={artists} passwords={passwords} />;
+  }
+
+  if (loading) return <div style={{ background: "#F6F7F9", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa", fontFamily: "'DM Sans', sans-serif" }}>Loading...</div>;
+
   const renderBoard = () => (
     <div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-        <button onClick={() => setArtistFilter("all")} style={{ ...pill, ...(artistFilter === "all" ? pillActive : {}) }}>All Artists</button>
-        {artists.map(a => (
-          <button key={a.id} onClick={() => setArtistFilter(artistFilter === a.id ? "all" : a.id)}
-            style={{ ...pill, ...(artistFilter === a.id ? { background: a.color + "15", color: a.color, borderColor: a.color + "40" } : {}) }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-            {a.name.split(" ")[0]}
-          </button>
-        ))}
-      </div>
+      {isManager && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          <button onClick={() => setArtistFilter("all")} style={{ ...pill, ...(artistFilter === "all" ? pillActive : {}) }}>All Artists</button>
+          {artists.map(a => (
+            <button key={a.id} onClick={() => setArtistFilter(artistFilter === a.id ? "all" : a.id)}
+              style={{ ...pill, ...(artistFilter === a.id ? { background: a.color + "15", color: a.color, borderColor: a.color + "40" } : {}) }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+              {a.name.split(" ")[0]}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
         {CATEGORIES.map(c => (
           <button key={c.id} onClick={() => setCatFilter(catFilter === c.id ? "all" : c.id)}
@@ -356,8 +548,8 @@ export default function RosterHub() {
                   {c.notes && <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>{c.notes}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => openEditContact(c)} style={iconBtn}>✎</button>
-                  <button onClick={() => updateContacts(contacts.filter(x => x.id !== c.id))} style={{ ...iconBtn, color: "#E8634B" }}>✕</button>
+                  <button onClick={() => openEditContact(c)} style={iconBtn}>{"\u270E"}</button>
+                  <button onClick={() => updateContacts(contacts.filter(x => x.id !== c.id))} style={{ ...iconBtn, color: "#E8634B" }}>{"\u2715"}</button>
                 </div>
               </div>
             </div>
@@ -367,24 +559,44 @@ export default function RosterHub() {
     );
   };
 
-  function ArtistManager() {
+  function SettingsModal() {
     return (
-      <Modal open={showArtistMgr} onClose={() => { setShowArtistMgr(false); setEditArtist(null); }} title="Manage Roster">
-        {artists.map(a => (
-          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
-            <span style={{ width: 12, height: 12, borderRadius: "50%", background: a.color }} />
-            <span style={{ flex: 1, color: "#333", fontSize: 14, fontWeight: 500 }}>{a.name}</span>
-            <button onClick={() => setEditArtist(a)} style={iconBtn}>✎</button>
-            <button onClick={() => { if (window.confirm(`Remove ${a.name}?`)) updateArtists(artists.filter(x => x.id !== a.id)); }} style={{ ...iconBtn, color: "#E8634B" }}>✕</button>
+      <Modal open={showSettings} onClose={() => { setShowSettings(false); setEditArtist(null); setSettingsTab("roster"); }} title="Settings">
+        <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid #eee", paddingBottom: 12 }}>
+          {[{ id: "roster", label: "Roster" }, { id: "passwords", label: "Passwords" }].map(t => (
+            <button key={t.id} onClick={() => setSettingsTab(t.id)}
+              style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                background: settingsTab === t.id ? "#E8ECF1" : "transparent", color: settingsTab === t.id ? "#333" : "#999" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {settingsTab === "roster" && (
+          <div>
+            {artists.map(a => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: a.color }} />
+                <span style={{ flex: 1, color: "#333", fontSize: 14, fontWeight: 500 }}>{a.name}</span>
+                <button onClick={() => setEditArtist(a)} style={iconBtn}>{"\u270E"}</button>
+                <button onClick={() => { if (window.confirm(`Remove ${a.name}?`)) updateArtists(artists.filter(x => x.id !== a.id)); }} style={{ ...iconBtn, color: "#E8634B" }}>{"\u2715"}</button>
+              </div>
+            ))}
+            <ArtistForm key={editArtist?.id || "new"} initial={editArtist}
+              onSave={(data) => {
+                if (editArtist) { updateArtists(artists.map(a => a.id === editArtist.id ? { ...editArtist, ...data } : a)); setEditArtist(null); }
+                else {
+                  const newId = data.name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) || uid();
+                  updateArtists([...artists, { ...data, id: newId }]);
+                  updatePasswords({ ...passwords, [newId]: newId + "2026" });
+                }
+              }}
+              onCancel={editArtist ? () => setEditArtist(null) : null}
+            />
           </div>
-        ))}
-        <ArtistForm key={editArtist?.id || "new"} initial={editArtist}
-          onSave={(data) => {
-            if (editArtist) { updateArtists(artists.map(a => a.id === editArtist.id ? { ...editArtist, ...data } : a)); setEditArtist(null); }
-            else updateArtists([...artists, { ...data, id: uid() }]);
-          }}
-          onCancel={editArtist ? () => setEditArtist(null) : null}
-        />
+        )}
+        {settingsTab === "passwords" && (
+          <PasswordManager passwords={passwords} artists={artists} onUpdatePasswords={updatePasswords} />
+        )}
       </Modal>
     );
   }
@@ -409,9 +621,13 @@ export default function RosterHub() {
     );
   }
 
-  if (loading) return <div style={{ background: "#F6F7F9", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa", fontFamily: "'DM Sans', sans-serif" }}>Loading...</div>;
-
   const modalTitle = modalType === "card" ? (editItem ? "Edit Card" : "Add Card") : (editItem ? "Edit Contact" : "Add Contact");
+  const headerTabs = isManager
+    ? [{ id: "board", label: "Board", icon: "\u25A6" }, { id: "contacts", label: "Contacts", icon: "\u{1F464}" }]
+    : [{ id: "board", label: "Board", icon: "\u25A6" }];
+
+  const artistObj = !isManager ? artists.find(a => a.id === currentUser?.id) : null;
+  const headerTitle = isManager ? "\u{1F3B5} Roster" : `\u{1F3B5} ${artistObj?.name || "Roster"}`;
 
   return (
     <div style={{ fontFamily: "'DM Sans', -apple-system, sans-serif", background: "#F6F7F9", minHeight: "100vh", fontSize: 13 }}>
@@ -419,10 +635,13 @@ export default function RosterHub() {
       <style>{`.kanban-card:hover .card-actions { opacity: 1 !important; } .kanban-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important; border-color: #D0D3D9 !important; }`}</style>
 
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "12px 14px" : "12px 24px", background: "#fff", borderBottom: "1px solid #E8E8E8", position: "sticky", top: 0, zIndex: 100 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>🎵 Roster</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>{headerTitle}</h1>
+          {!isManager && artistObj && <span style={{ width: 10, height: 10, borderRadius: "50%", background: artistObj.color }} />}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div style={{ display: "flex", background: "#F0F1F3", borderRadius: 8, padding: 2 }}>
-            {[{ id: "board", label: "Board", icon: "▦" }, { id: "contacts", label: "Contacts", icon: "👤" }].map(t => (
+            {headerTabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
                 display: "flex", alignItems: "center", gap: 5, padding: isMobile ? "7px 10px" : "7px 14px",
                 border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
@@ -431,21 +650,26 @@ export default function RosterHub() {
               }}>{t.icon} {!isMobile && t.label}</button>
             ))}
           </div>
-          <button onClick={() => setShowArtistMgr(true)} style={{ background: "#F0F1F3", border: "none", width: 34, height: 34, borderRadius: 8, cursor: "pointer", fontSize: 14, color: "#666" }}>⚙</button>
-          <button onClick={() => { activeTab === "contacts" ? openAddContact() : openAddCard(); }}
+          {isManager && <button onClick={() => setShowSettings(true)} style={{ background: "#F0F1F3", border: "none", width: 34, height: 34, borderRadius: 8, cursor: "pointer", fontSize: 14, color: "#666" }}>{"\u2699"}</button>}
+          <button onClick={() => { activeTab === "contacts" && isManager ? openAddContact() : openAddCard(); }}
             style={{ background: "#4A90D9", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>+ Add</button>
+          <button onClick={handleLogout} title="Sign out"
+            style={{ background: "#F0F1F3", border: "none", width: 34, height: 34, borderRadius: 8, cursor: "pointer", fontSize: 13, color: "#999", display: "flex", alignItems: "center", justifyContent: "center" }}>{"\u2192"}</button>
         </div>
       </header>
 
       <main style={{ padding: isMobile ? "14px" : "20px 24px", maxWidth: 1200, margin: "0 auto" }}>
         {activeTab === "board" && renderBoard()}
-        {activeTab === "contacts" && renderContacts()}
+        {activeTab === "contacts" && isManager && renderContacts()}
       </main>
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditItem(null); }} title={modalTitle}>
-        {modalType === "card" ? <CardForm initial={editItem} onSave={handleSave} artists={artists} defaultStatus={defaultStatus} /> : <ContactForm initial={editItem} onSave={handleSave} artists={artists} />}
+        {modalType === "card"
+          ? <CardForm initial={editItem} onSave={handleSave} artists={artists} defaultStatus={defaultStatus} lockedArtistId={artistId} />
+          : <ContactForm initial={editItem} onSave={handleSave} artists={artists} />
+        }
       </Modal>
-      <ArtistManager />
+      {isManager && <SettingsModal />}
     </div>
   );
 }
